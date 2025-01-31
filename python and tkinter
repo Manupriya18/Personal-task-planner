@@ -1,0 +1,258 @@
+import tkinter as tk
+from tkinter import simpledialog, messagebox
+from datetime import datetime
+import random
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from tkinter import ttk
+from tkcalendar import Calendar
+import matplotlib.dates as mdates  # Importing mdates
+
+# List of motivational tasks
+motivational_tasks = [
+    "Drink water",
+    "Eat at least one vegetable or fruit",
+    "Do at least one thing that makes you happy",
+    "Must do something productive today"
+]
+
+# Function to add a task to the "Today's Tasks" section
+def add_today_task():
+    task = simpledialog.askstring("Task", "Enter a task for today:")
+    if task:
+        today_tasks_listbox.insert(tk.END, f"Must Do: {task}")
+        save_today_task_to_file(task)
+        update_today_progress()
+
+# Function to add a future task with a deadline
+def add_future_task():
+    task = simpledialog.askstring("Task", "Enter a future task:")
+    if task:
+        # Use calendar to select deadline
+        deadline = ask_for_deadline()
+        if deadline:
+            future_tasks_listbox.insert(tk.END, f"{task} - {deadline.strftime('%Y-%m-%d')}")
+            save_future_task_to_file(task, deadline)
+            update_graph()  # Update the graph whenever a new task is added
+        else:
+            messagebox.showwarning("No Deadline", "Please select a valid deadline.")
+
+# Function to ask for deadline using a calendar
+def ask_for_deadline():
+    selected_date = None
+
+    def on_date_select():
+        nonlocal selected_date
+        selected_date = cal.selection_get()
+        calendar_window.quit()  # Close the calendar once a date is selected
+
+    # Create a new pop-up window for the calendar
+    calendar_window = tk.Toplevel(root)
+    calendar_window.title("Select Deadline")
+    cal = Calendar(calendar_window, selectmode="day", date_pattern="y-mm-dd")
+    cal.pack(padx=10, pady=10)
+
+    select_button = tk.Button(calendar_window, text="Select", command=on_date_select)
+    select_button.pack(pady=10)
+
+    root.wait_window(calendar_window)  # Wait until the calendar window is closed
+
+    return selected_date  # Return the selected date or None if no date was selected
+
+# Function to save today's task to a text file
+def save_today_task_to_file(task):
+    with open("today_tasks.txt", "a") as f:
+        f.write(f"{task}\n")
+
+# Function to save future tasks to a text file
+def save_future_task_to_file(task, deadline):
+    with open("future_tasks.txt", "a") as f:
+        f.write(f"{task} - {deadline.strftime('%Y-%m-%d')}\n")
+
+# Function to remove a task
+def remove_task():
+    try:
+        selected_task_index = today_tasks_listbox.curselection()[0]
+        today_tasks_listbox.delete(selected_task_index)
+        update_today_progress()
+    except IndexError:
+        messagebox.showwarning("No selection", "Please select a task to remove.")
+
+# Function to mark a task as completed (for both today's and future tasks)
+def mark_task_completed():
+    try:
+        selected_task_index = today_tasks_listbox.curselection()[0]
+        task = today_tasks_listbox.get(selected_task_index)
+        task = f"✔️ {task}"
+        today_tasks_listbox.delete(selected_task_index)
+        today_tasks_listbox.insert(tk.END, task)
+        update_today_progress()
+    except IndexError:
+        messagebox.showwarning("No selection", "Please select a task to mark as completed.")
+
+# Function to mark a future task as completed
+def mark_future_task_completed():
+    try:
+        selected_task_index = future_tasks_listbox.curselection()[0]
+        task = future_tasks_listbox.get(selected_task_index)
+        task = f"✔️ {task}"
+        future_tasks_listbox.delete(selected_task_index)
+        future_tasks_listbox.insert(tk.END, task)
+        update_graph()  # Update the graph whenever a task is marked completed
+    except IndexError:
+        messagebox.showwarning("No selection", "Please select a future task to mark as completed.")
+
+# Function to show a motivational quote
+def show_motivational_quote():
+    quotes = [
+        "Success is not the key to happiness. Happiness is the key to success.",
+        "The only way to do great work is to love what you do.",
+        "You are capable of amazing things.",
+        "Don't stop when you're tired. Stop when you're done.",
+        "Dream big. Work hard. Stay focused.",
+        "Believe you can and you're halfway there.",
+        "The best time to plant a tree was 20 years ago. The second best time is now.",
+        "Success is the sum of small efforts, repeated day in and day out.",
+        "Hardships often prepare ordinary people for an extraordinary destiny.",
+        "Your only limit is your mind.",
+        "Push yourself because no one else is going to do it for you.",
+        "It always seems impossible until it's done.",
+        "Do something today that your future self will thank you for.",
+        "Success doesn't just find you. You have to go out and get it.",
+        "The harder you work for something, the greater you'll feel when you achieve it."
+    ]
+    quote = random.choice(quotes)
+    messagebox.showinfo("Motivational Quote", quote)
+
+# Function to update the progress bar for today's tasks
+def update_today_progress():
+    total_tasks = len(today_tasks_listbox.get(0, tk.END))
+    completed_tasks = sum(1 for task in today_tasks_listbox.get(0, tk.END) if "✔️" in task)
+    if total_tasks > 0:
+        progress = (completed_tasks / total_tasks) * 100
+        progress_bar['value'] = progress
+
+# Function to update the graph showing tasks and their deadlines
+def update_graph():
+    tasks = []
+    deadlines = []
+
+    # Reading future tasks and deadlines from the listbox
+    for task in future_tasks_listbox.get(0, tk.END):
+        task_name, deadline_str = task.rsplit(" - ", 1)
+        task_deadline = datetime.strptime(deadline_str, "%Y-%m-%d")
+        tasks.append(task_name)
+        deadlines.append(task_deadline)
+
+    # Sorting tasks by deadline
+    sorted_tasks = sorted(zip(deadlines, tasks), key=lambda x: x[0])
+    deadlines, tasks = zip(*sorted_tasks)
+
+    # Creating the plot
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.scatter(deadlines, tasks, c="blue", s=100, edgecolors='black')
+    ax.set_xlabel('Deadline')
+    ax.set_ylabel('Tasks')
+    ax.set_title('Future Tasks and Their Deadlines')
+
+    # Formatting the date labels on the x-axis
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %d, %Y'))
+    ax.xaxis.set_major_locator(mdates.MonthLocator())
+    fig.autofmt_xdate()
+
+    # Clear the previous canvas before adding the new one
+    for widget in future_tasks_graph_frame.winfo_children():
+        widget.destroy()
+
+    # Embedding the graph in Tkinter window
+    canvas = FigureCanvasTkAgg(fig, master=future_tasks_graph_frame)  # Create canvas
+    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)  # Pack canvas into the frame
+    canvas.draw()  # Draw the plot
+
+# Function to show the date and time in the header
+def update_time():
+    current_time = datetime.now().strftime("%A, %B %d, %Y %H:%M:%S")
+    time_label.config(text=current_time)
+    root.after(1000, update_time)
+
+# Set up the root window
+root = tk.Tk()
+root.title("Task Planner and Motivational App")
+root.geometry("900x700")
+root.config(bg="#1a1a1a")
+
+# Header section with time and navigation bar
+header_frame = tk.Frame(root, bg="#333333", pady=10)
+header_frame.pack(fill=tk.X)
+time_label = tk.Label(header_frame, text="", font=("Helvetica", 16), bg="#333333", fg="white")
+time_label.pack()
+update_time()
+
+# Navigation bar for different sections
+navbar_frame = tk.Frame(root, bg="#444444", pady=10)
+navbar_frame.pack(fill=tk.X)
+
+def show_today_tasks():
+    today_tasks_frame.pack(fill=tk.BOTH, expand=True)
+    future_tasks_frame.pack_forget()
+
+def show_future_tasks():
+    today_tasks_frame.pack_forget()
+    future_tasks_frame.pack(fill=tk.BOTH, expand=True)
+
+today_tasks_button = tk.Button(navbar_frame, text="Today's Tasks", font=("Helvetica", 14), fg="#ffffff", bg="#3498db", command=show_today_tasks)
+today_tasks_button.pack(side=tk.LEFT, padx=10, pady=5)
+
+future_tasks_button = tk.Button(navbar_frame, text="Future Tasks", font=("Helvetica", 14), fg="#ffffff", bg="#3498db", command=show_future_tasks)
+future_tasks_button.pack(side=tk.LEFT, padx=10, pady=5)
+
+# Today's tasks section
+today_tasks_frame = tk.Frame(root, bg="#1a1a1a", pady=10)
+
+# Listbox for today's tasks
+today_tasks_listbox = tk.Listbox(today_tasks_frame, font=("Helvetica", 12), bg="#ecf0f1", fg="#2c3e50", height=10, bd=0, relief="flat")
+today_tasks_listbox.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+# Progress bar for today's tasks
+progress_bar = ttk.Progressbar(today_tasks_frame, length=200, mode="determinate")
+progress_bar.pack(padx=10, pady=5)
+
+# Buttons for today's task section
+add_task_button = tk.Button(today_tasks_frame, text="Add Task", font=("Helvetica", 14), fg="#ffffff", bg="#3498db", command=add_today_task)
+add_task_button.pack(padx=10, pady=5)
+
+remove_task_button = tk.Button(today_tasks_frame, text="Remove Task", font=("Helvetica", 14), fg="#ffffff", bg="#e74c3c", command=remove_task, relief="raised", width=25)
+remove_task_button.pack(padx=10, pady=5)
+
+mark_task_button = tk.Button(today_tasks_frame, text="Mark Task Completed", font=("Helvetica", 14), fg="#ffffff", bg="#2ecc71", command=mark_task_completed, relief="raised", width=25)
+mark_task_button.pack(padx=10, pady=5)
+
+show_motivational_quote_button = tk.Button(today_tasks_frame, text="Show Motivational Quote", font=("Helvetica", 14), fg="#ffffff", bg="#9b59b6", command=show_motivational_quote)
+show_motivational_quote_button.pack(padx=10, pady=5)
+
+# Future tasks section
+future_tasks_frame = tk.Frame(root, bg="#1a1a1a", pady=10)
+
+# Listbox for future tasks
+future_tasks_listbox = tk.Listbox(future_tasks_frame, font=("Helvetica", 12), bg="#ecf0f1", fg="#2c3e50", height=10, bd=0, relief="flat")
+future_tasks_listbox.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+# Frame for graph visualization
+future_tasks_graph_frame = tk.Frame(future_tasks_frame, bg="#1a1a1a", pady=10)
+future_tasks_graph_frame.pack(fill=tk.BOTH, expand=True)
+
+# Buttons for future task section
+add_future_task_button = tk.Button(future_tasks_frame, text="Add Future Task", font=("Helvetica", 14), fg="#ffffff", bg="#3498db", command=add_future_task)
+add_future_task_button.pack(padx=10, pady=5)
+
+mark_future_task_button = tk.Button(future_tasks_frame, text="Mark Future Task Completed", font=("Helvetica", 14), fg="#ffffff", bg="#2ecc71", command=mark_future_task_completed, relief="raised", width=25)
+mark_future_task_button.pack(padx=10, pady=5)
+
+# Start with the "Today's Tasks" section
+show_today_tasks()
+
+try:
+    root.mainloop()
+except Exception as e:
+    messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+    root.quit()
